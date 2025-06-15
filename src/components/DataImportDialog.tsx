@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -25,7 +24,7 @@ interface FileStatus {
 const CSV_FILES = [
   { name: 'Allsanger.csv', parser: 'parseAllsanger' },
   { name: 'Per_Lasson.csv', parser: 'parsePerLasson' },
-  { name: 'Utenlandsk_popul_rmusikk.csv', parser: 'parseUtenlandskPopular' },
+  { name: 'Utenlandsk_populærmusikk.csv', parser: 'parseUtenlandskPopular' },
   { name: 'Forskjellig.csv', parser: 'parseForskjellig' },
   { name: '1905-noter.csv', parser: 'parse1905Noter' },
   { name: 'Forskjellige_noter.csv', parser: 'parseForskjelligeNoter' },
@@ -45,7 +44,7 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
     ));
   };
 
-  const createOrGetPerson = async (name: string, lifespan?: string) => {
+  const createOrGetPerson = async (name: string, lifespan?: string, profileLink?: string) => {
     if (!name || name.trim() === '') return null;
     
     // Clean up the name
@@ -60,6 +59,13 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
       .maybeSingle();
     
     if (existingPerson) {
+      // Update with link if provided and not already set
+      if (profileLink) {
+        await supabase
+          .from('person')
+          .update({ profile_link: profileLink })
+          .eq('id', existingPerson.id);
+      }
       return existingPerson.id;
     }
     
@@ -70,7 +76,8 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
       .insert({
         full_name: cleanName,
         birth_year: lifespanData?.birthYear,
-        death_year: lifespanData?.deathYear
+        death_year: lifespanData?.deathYear,
+        profile_link: profileLink
       })
       .select('id')
       .single();
@@ -147,6 +154,7 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
         .from('work')
         .insert({
           title: work.title.trim(),
+          title_link: work.titleLink,
           composition_year: work.compositionYear,
           key_signature: work.key,
           form_or_genre: work.form,
@@ -162,28 +170,30 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
       
       // Create composer relationship
       if (work.composer) {
-        const composerId = await createOrGetPerson(work.composer, work.composerLifespan);
+        const composerId = await createOrGetPerson(work.composer, work.composerLifespan, work.composerLink);
         if (composerId) {
           await supabase
             .from('work_contributor')
             .insert({
               work_id: newWork.id,
               person_id: composerId,
-              role: 'composer'
+              role: 'composer',
+              link: work.composerLink
             });
         }
       }
       
       // Create lyricist relationship
       if (work.lyricist) {
-        const lyricistId = await createOrGetPerson(work.lyricist, work.lyricistLifespan);
+        const lyricistId = await createOrGetPerson(work.lyricist, work.lyricistLifespan, work.lyricistLink);
         if (lyricistId) {
           await supabase
             .from('work_contributor')
             .insert({
               work_id: newWork.id,
               person_id: lyricistId,
-              role: 'lyricist'
+              role: 'lyricist',
+              link: work.lyricistLink
             });
         }
       }

@@ -12,9 +12,12 @@ export interface ImportResult {
 
 export interface ParsedWork {
   title: string;
+  titleLink?: string;
   composer?: string;
+  composerLink?: string;
   composerLifespan?: string;
   lyricist?: string;
+  lyricistLink?: string;
   lyricistLifespan?: string;
   compositionYear?: number;
   category: string;
@@ -24,20 +27,20 @@ export interface ParsedWork {
   notes?: string;
 }
 
-// Import the local CSV files directly
-import AllsangerCSV from '../../innholdsfortegnelse_csv/Allsanger.csv?raw';
-import PerLassonCSV from '../../innholdsfortegnelse_csv/Per_Lasson.csv?raw';
-import UtenlandskCSV from '../../innholdsfortegnelse_csv/Utenlandsk_popul_rmusikk.csv?raw';
-import ForskjelligCSV from '../../innholdsfortegnelse_csv/Forskjellig.csv?raw';
-import NotesPP1905CSV from '../../innholdsfortegnelse_csv/1905-noter.csv?raw';
-import ForskjelligeNoterCSV from '../../innholdsfortegnelse_csv/Forskjellige_noter.csv?raw';
-import PoscaCSV from '../../innholdsfortegnelse_csv/Posca.csv?raw';
-import HefterCSV from '../../innholdsfortegnelse_csv/Hefter.csv?raw';
+// Import the local CSV files directly from the links_latest directory
+import AllsangerCSV from '../../innholdsfortegnelse_csv_links_latest/Allsanger.csv?raw';
+import PerLassonCSV from '../../innholdsfortegnelse_csv_links_latest/Per_Lasson.csv?raw';
+import UtenlandskCSV from '../../innholdsfortegnelse_csv_links_latest/Utenlandsk_populærmusikk.csv?raw';
+import ForskjelligCSV from '../../innholdsfortegnelse_csv_links_latest/Forskjellig.csv?raw';
+import NotesPP1905CSV from '../../innholdsfortegnelse_csv_links_latest/1905-noter.csv?raw';
+import ForskjelligeNoterCSV from '../../innholdsfortegnelse_csv_links_latest/Forskjellige_noter.csv?raw';
+import PoscaCSV from '../../innholdsfortegnelse_csv_links_latest/Posca.csv?raw';
+import HefterCSV from '../../innholdsfortegnelse_csv_links_latest/Hefter.csv?raw';
 
 const LOCAL_CSV_FILES = {
   'Allsanger.csv': AllsangerCSV,
   'Per_Lasson.csv': PerLassonCSV,
-  'Utenlandsk_popul_rmusikk.csv': UtenlandskCSV,
+  'Utenlandsk_populærmusikk.csv': UtenlandskCSV,
   'Forskjellig.csv': ForskjelligCSV,
   '1905-noter.csv': NotesPP1905CSV,
   'Forskjellige_noter.csv': ForskjelligeNoterCSV,
@@ -140,44 +143,52 @@ export const csvImportService = {
 
   parseAllsanger(rows: CSVRow[]): ParsedWork[] {
     return rows
-      .filter(row => this.cleanText(row.Tittel)) // Only include rows with titles
+      .filter(row => this.cleanText(row.Tittel))
       .map(row => ({
         title: this.cleanText(row.Tittel) || '',
+        titleLink: this.cleanText(row.Tittel_link),
         key: this.cleanText(row.Toneart),
         composer: this.cleanText(row.Komponist),
-        composerLifespan: this.cleanText(row['Unnamed: 8']),
+        composerLink: this.cleanText(row.Komponist_link),
+        composerLifespan: this.cleanText(row['Unnamed: 9']),
         lyricist: this.cleanText(row.Tekstforfatter),
-        lyricistLifespan: this.cleanText(row['Unnamed: 11']),
+        lyricistLink: this.cleanText(row.Tekstforfatter_link),
+        lyricistLifespan: this.cleanText(row['Unnamed: 12']),
         category: 'Allsanger',
-        notes: `Pages: ${row['Antall sider'] || 'Unknown'}`
+        notes: `Pages: ${row.Antall_sider || 'Unknown'}`
       }));
   },
 
   parsePerLasson(rows: CSVRow[]): ParsedWork[] {
     return rows
-      .filter(row => this.cleanText(row.Melodi)) // Only include rows with melodies
+      .filter(row => this.cleanText(row.Melodi))
       .map(row => ({
         title: this.cleanText(row.Melodi) || '',
         composer: this.cleanText(row.Komponist),
-        composerLifespan: this.cleanText(row['Levde når']),
+        composerLink: this.cleanText(row.Komponist_link),
+        composerLifespan: this.cleanText(row.Levde_når),
         lyricist: this.cleanText(row.Lyrikk),
-        lyricistLifespan: this.cleanText(row['Unnamed: 6']),
-        compositionYear: this.extractYear(row['Når komponert']),
+        lyricistLink: this.cleanText(row.Lyrikk_link),
+        lyricistLifespan: this.cleanText(row.Unnamed_7),
+        compositionYear: this.extractYear(row.Når_komponert),
         category: 'Per Lasson',
-        notes: `No: ${row['Unnamed: 1'] || ''}`
+        notes: `No: ${row.Unnamed_2 || ''}`
       }));
   },
 
   parseUtenlandskPopular(rows: CSVRow[]): ParsedWork[] {
     return rows
-      .filter(row => this.cleanText(row.Melodi)) // Only include rows with melodies
+      .filter(row => this.cleanText(row.Melodi))
       .map(row => ({
         title: this.cleanText(row.Melodi) || '',
+        titleLink: this.cleanText(row.Melodi_link),
         composer: this.cleanText(row.Komponist),
-        composerLifespan: this.cleanText(row['Levde når']),
+        composerLink: this.cleanText(row.Komponist_link),
+        composerLifespan: this.cleanText(row.Levde_når),
         lyricist: this.cleanText(row.Lyrikk),
-        lyricistLifespan: this.cleanText(row['Levde når.1']),
-        compositionYear: this.extractYear(row['Når komponert']),
+        lyricistLink: this.cleanText(row.Lyrikk_link),
+        lyricistLifespan: this.cleanText(row.Levde_når_2),
+        compositionYear: this.extractYear(row.Når_komponert),
         category: 'Utenlandsk populærmusikk',
         notes: this.cleanText(row.Sanginfo)
       }));
@@ -185,13 +196,16 @@ export const csvImportService = {
 
   parseForskjellig(rows: CSVRow[]): ParsedWork[] {
     return rows
-      .filter(row => this.cleanText(row['Unnamed: 1'])) // Only include rows with titles
+      .filter(row => this.cleanText(row.Unnamed_1))
       .map(row => ({
-        title: this.cleanText(row['Unnamed: 1']) || '',
+        title: this.cleanText(row.Unnamed_1) || '',
+        titleLink: this.cleanText(row.Unnamed_2_link),
         composer: this.cleanText(row.Komponist),
-        composerLifespan: this.cleanText(row['Unnamed: 3']),
-        lyricist: this.cleanText(row['Evt. Tekstforfatter']),
-        lyricistLifespan: this.cleanText(row['Unnamed: 5']),
+        composerLink: this.cleanText(row.Komponist_link),
+        composerLifespan: this.cleanText(row.Unnamed_4),
+        lyricist: this.cleanText(row.Evt__Tekstforfatter),
+        lyricistLink: this.cleanText(row.Evt__Tekstforfatter_link),
+        lyricistLifespan: this.cleanText(row.Unnamed_6),
         compositionYear: this.extractYear(row.Komponert),
         category: 'Forskjellig',
         notes: this.cleanText(row.Kilde)
@@ -200,56 +214,64 @@ export const csvImportService = {
 
   parse1905Noter(rows: CSVRow[]): ParsedWork[] {
     return rows
-      .filter(row => this.cleanText(row['Unnamed: 1'])) // Only include rows with titles
+      .filter(row => this.cleanText(row['1905-noter_']))
       .map(row => ({
-        title: this.cleanText(row['Unnamed: 1']) || '',
-        composer: this.cleanText(row['1905-noter. ']),
-        publisher: this.cleanText(row['Unnamed: 2']),
+        title: this.cleanText(row.Unnamed_2) || '',
+        composer: this.cleanText(row['1905-noter_']),
+        publisher: this.cleanText(row.Unnamed_3),
         category: '1905-noter',
-        notes: this.cleanText(row['Unnamed: 4'])
+        notes: this.cleanText(row.Unnamed_5)
       }));
   },
 
   parseForskjelligeNoter(rows: CSVRow[]): ParsedWork[] {
     return rows
-      .filter(row => this.cleanText(row.Tittel)) // Only include rows with titles
+      .filter(row => this.cleanText(row.Tittel))
       .map(row => ({
         title: this.cleanText(row.Tittel) || '',
-        form: this.cleanText(row['Unnamed: 2']),
-        key: this.cleanText(row['Unnamed: 3']),
+        titleLink: this.cleanText(row.Tittel_link),
+        form: this.cleanText(row.Unnamed_3),
+        key: this.cleanText(row.Unnamed_4),
         composer: this.cleanText(row.Komponist),
-        composerLifespan: this.cleanText(row['Unnamed: 5']),
+        composerLink: this.cleanText(row.Komponist_link),
+        composerLifespan: this.cleanText(row.Unnamed_6),
         lyricist: this.cleanText(row.Tekstforfatter),
-        lyricistLifespan: this.cleanText(row['Unnamed: 8']),
-        compositionYear: this.extractYear(row['Unnamed: 9']),
+        lyricistLink: this.cleanText(row.Tekstforfatter_link),
+        lyricistLifespan: this.cleanText(row.Unnamed_9),
+        compositionYear: this.extractYear(row.Unnamed_10),
         category: 'Forskjellige noter'
       }));
   },
 
   parsePosca(rows: CSVRow[]): ParsedWork[] {
     return rows
-      .filter(row => this.cleanText(row['Unnamed: 2'])) // Only include rows with titles
+      .filter(row => this.cleanText(row.Unnamed_2))
       .map(row => ({
-        title: this.cleanText(row['Unnamed: 2']) || '',
-        composer: this.cleanText(row['Unnamed: 3']),
-        composerLifespan: this.cleanText(row['Unnamed: 4']),
-        lyricist: this.cleanText(row['Unnamed: 5']),
-        lyricistLifespan: this.cleanText(row['Unnamed: 6']),
-        compositionYear: this.extractYear(row['Unnamed: 7']),
-        publisher: this.cleanText(row['Unnamed: 12']),
+        title: this.cleanText(row.Unnamed_2) || '',
+        titleLink: this.cleanText(row.Unnamed_3_link),
+        composer: this.cleanText(row.Unnamed_3),
+        composerLink: this.cleanText(row.Unnamed_3_link),
+        composerLifespan: this.cleanText(row.Unnamed_4),
+        lyricist: this.cleanText(row.Unnamed_5),
+        lyricistLink: this.cleanText(row.Unnamed_6_link),
+        lyricistLifespan: this.cleanText(row.Unnamed_6),
+        compositionYear: this.extractYear(row.Unnamed_7),
+        publisher: this.cleanText(row.Unnamed_12),
         category: 'Posca'
       }));
   },
 
   parseHefter(rows: CSVRow[]): ParsedWork[] {
     return rows
-      .filter(row => this.cleanText(row['Unnamed: 1'])) // Only include rows with titles
+      .filter(row => this.cleanText(row.Unnamed_2))
       .map(row => ({
-        title: this.cleanText(row['Unnamed: 1']) || '',
-        composer: this.cleanText(row['Unnamed: 2']),
-        composerLifespan: this.cleanText(row['Unnamed: 3']),
+        title: this.cleanText(row.Unnamed_2) || '',
+        titleLink: this.cleanText(row.Unnamed_2_link),
+        composer: this.cleanText(row.Unnamed_3),
+        composerLink: this.cleanText(row.Unnamed_3_link),
+        composerLifespan: this.cleanText(row.Unnamed_4),
         category: 'Hefter',
-        notes: this.cleanText(row['Unnamed: 4'])
+        notes: this.cleanText(row.Unnamed_9)
       }));
   }
 };
