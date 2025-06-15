@@ -28,7 +28,7 @@ interface ContributorData {
 
 interface PublicationData {
   work_id: number;
-  publisher_name: string;
+  publisher_id?: number;
 }
 
 export const optimizedImportService = {
@@ -130,6 +130,43 @@ export const optimizedImportService = {
     }
   },
 
+  async ensurePublishers(works: ParsedWork[]): Promise<Map<string, number>> {
+    // Get unique publisher names
+    const uniquePublisherNames = new Set(
+      works.map(work => work.publisher).filter(Boolean)
+    );
+
+    if (uniquePublisherNames.size === 0) {
+      return new Map();
+    }
+
+    // Get existing publishers
+    const { data: existingPublishers } = await supabase
+      .from('publisher')
+      .select('id, name')
+      .in('name', Array.from(uniquePublisherNames));
+
+    const publisherCache = new Map<string, number>();
+    existingPublishers?.forEach(pub => publisherCache.set(pub.name, pub.id));
+
+    // Create missing publishers
+    const missingPublishers = Array.from(uniquePublisherNames)
+      .filter(name => !publisherCache.has(name));
+
+    if (missingPublishers.length > 0) {
+      console.log(`Creating ${missingPublishers.length} new publishers`);
+      
+      const { data: createdPublishers } = await supabase
+        .from('publisher')
+        .insert(missingPublishers.map(name => ({ name })))
+        .select('id, name');
+
+      createdPublishers?.forEach(pub => publisherCache.set(pub.name, pub.id));
+    }
+
+    return publisherCache;
+  },
+
   async batchImportWorks(context: BatchImportContext, works: ParsedWork[]): Promise<{
     imported: number;
     skipped: number;
@@ -152,6 +189,9 @@ export const optimizedImportService = {
     if (newWorks.length === 0) {
       return { imported: 0, skipped, errors };
     }
+
+    // Ensure publishers exist
+    const publisherCache = await this.ensurePublishers(newWorks);
     
     // Prepare work data
     const workData: WorkData[] = newWorks.map(work => ({
@@ -193,7 +233,7 @@ export const optimizedImportService = {
       // Create contributors and publications in parallel
       await Promise.all([
         this.batchCreateContributors(context, newWorks, createdWorks),
-        this.batchCreatePublications(newWorks, createdWorks)
+        this.batchCreatePublications(newWorks, createdWorks, publisherCache)
       ]);
       
     } catch (error) {
@@ -255,17 +295,21 @@ export const optimizedImportService = {
 
   async batchCreatePublications(
     works: ParsedWork[], 
-    createdWorks: { id: number; title: string }[]
+    createdWorks: { id: number; title: string }[],
+    publisherCache: Map<string, number>
   ): Promise<void> {
     const publications: PublicationData[] = [];
     
     createdWorks.forEach((createdWork, index) => {
       const originalWork = works[index];
       if (originalWork.publisher) {
-        publications.push({
-          work_id: createdWork.id,
-          publisher_name: originalWork.publisher
-        });
+        const publisherId = publisherCache.get(originalWork.publisher);
+        if (publisherId) {
+          publications.push({
+            work_id: createdWork.id,
+            publisher_id: publisherId
+          });
+        }
       }
     });
     

@@ -63,6 +63,7 @@ export type Database = {
           id: number
           plate_number: string | null
           publication_year: number | null
+          publisher_id: number | null
           publisher_name: string | null
           work_id: number | null
         }
@@ -71,6 +72,7 @@ export type Database = {
           id?: number
           plate_number?: string | null
           publication_year?: number | null
+          publisher_id?: number | null
           publisher_name?: string | null
           work_id?: number | null
         }
@@ -79,10 +81,18 @@ export type Database = {
           id?: number
           plate_number?: string | null
           publication_year?: number | null
+          publisher_id?: number | null
           publisher_name?: string | null
           work_id?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "publication_publisher_id_fkey"
+            columns: ["publisher_id"]
+            isOneToOne: false
+            referencedRelation: "publisher"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "publication_work_id_fkey"
             columns: ["work_id"]
@@ -91,6 +101,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      publisher: {
+        Row: {
+          created_at: string | null
+          id: number
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: number
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: number
+          name?: string
+        }
+        Relationships: []
       }
       work: {
         Row: {
