@@ -27,6 +27,12 @@ export interface ParsedWork {
   notes?: string;
 }
 
+export interface BatchImportContext {
+  categoryCache: Map<string, number>;
+  personCache: Map<string, number>;
+  existingWorks: Set<string>;
+}
+
 // Available CSV files in the workspace
 const AVAILABLE_CSV_FILES = [
   '1905-noter.csv',
@@ -142,7 +148,7 @@ export const csvImportService = {
 
   parseEldrePopulaermusikk(rows: CSVRow[]): ParsedWork[] {
     console.log('Parsing Eldre_populærmusikk CSV with columns:', rows[0] ? Object.keys(rows[0]) : 'No data');
-    console.log('First few rows:', rows.slice(0, 3));
+    console.log('Sample rows:', rows.slice(0, 2));
     
     return rows
       .filter(row => {
@@ -168,14 +174,6 @@ export const csvImportService = {
           publisher: this.cleanText(row.Forlag || row.forlag),
           notes: this.cleanText(row.Diverse || row.diverse || row.Merknad || row.merknad)
         };
-        
-        console.log('Parsed work:', work.title, 'with data:', {
-          composer: work.composer,
-          lyricist: work.lyricist,
-          titleLink: work.titleLink,
-          composerLink: work.composerLink,
-          lyricistLink: work.lyricistLink
-        });
         
         return work;
       });

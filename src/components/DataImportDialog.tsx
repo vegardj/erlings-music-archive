@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, AlertCircle, FileText, Upload, X } from "lucide-react";
 import { csvImportService, ImportResult, ParsedWork } from "@/services/csvImportService";
-import { supabase } from "@/integrations/supabase/client";
+import { optimizedImportService } from "@/services/optimizedImportService";
 import { useToast } from "@/hooks/use-toast";
 
 interface DataImportDialogProps {
@@ -20,6 +20,7 @@ interface ImportStatus {
   total: number;
   skipped: number;
   errors: string[];
+  currentStep: string;
 }
 
 export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) => {
@@ -30,182 +31,16 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
     imported: 0,
     total: 0,
     skipped: 0,
-    errors: []
+    errors: [],
+    currentStep: ''
   });
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
 
   const availableFiles = csvImportService.getAvailableFiles();
 
-  const createOrGetPerson = async (name: string, lifespan?: string, profileLink?: string) => {
-    if (!name || name.trim() === '') return null;
-    
-    // Clean up the name
-    const cleanName = name.replace(/['"]/g, '').trim();
-    if (!cleanName) return null;
-    
-    // Check if person already exists
-    const { data: existingPerson } = await supabase
-      .from('person')
-      .select('id')
-      .eq('full_name', cleanName)
-      .maybeSingle();
-    
-    if (existingPerson) {
-      // Update with link if provided and not already set
-      if (profileLink) {
-        await supabase
-          .from('person')
-          .update({ profile_link: profileLink })
-          .eq('id', existingPerson.id);
-      }
-      return existingPerson.id;
-    }
-    
-    // Create new person
-    const lifespanData = csvImportService.extractLifespan(lifespan || '');
-    const { data: newPerson, error } = await supabase
-      .from('person')
-      .insert({
-        full_name: cleanName,
-        birth_year: lifespanData?.birthYear,
-        death_year: lifespanData?.deathYear,
-        profile_link: profileLink
-      })
-      .select('id')
-      .single();
-    
-    if (error) {
-      console.error('Error creating person:', error);
-      return null;
-    }
-    
-    return newPerson.id;
-  };
-
-  const createOrGetCategory = async (name: string) => {
-    // Check if category exists
-    const { data: existingCategory } = await supabase
-      .from('category')
-      .select('id')
-      .eq('name', name)
-      .maybeSingle();
-    
-    if (existingCategory) {
-      return existingCategory.id;
-    }
-    
-    // Create new category
-    const { data: newCategory, error } = await supabase
-      .from('category')
-      .insert({ name })
-      .select('id')
-      .single();
-    
-    if (error) {
-      console.error('Error creating category:', error);
-      return null;
-    }
-    
-    return newCategory.id;
-  };
-
-  const checkWorkExists = async (title: string, categoryId: number | null): Promise<boolean> => {
-    const { data, error } = await supabase
-      .from('work')
-      .select('id')
-      .eq('title', title)
-      .eq('category_id', categoryId)
-      .maybeSingle();
-    
-    if (error) {
-      console.error('Error checking work existence:', error);
-      return false;
-    }
-    
-    return !!data;
-  };
-
-  const importWork = async (work: ParsedWork): Promise<{ success: boolean; skipped?: boolean; error?: string }> => {
-    try {
-      // Skip empty titles
-      if (!work.title || work.title.trim() === '') {
-        return { success: false, error: 'Empty title' };
-      }
-
-      // Get or create category
-      const categoryId = await createOrGetCategory(work.category);
-      
-      // Check if work already exists
-      const exists = await checkWorkExists(work.title.trim(), categoryId);
-      if (exists) {
-        return { success: true, skipped: true };
-      }
-      
-      // Create the work
-      const { data: newWork, error: workError } = await supabase
-        .from('work')
-        .insert({
-          title: work.title.trim(),
-          title_link: work.titleLink,
-          composition_year: work.compositionYear,
-          key_signature: work.key,
-          form_or_genre: work.form,
-          comments: work.notes,
-          category_id: categoryId
-        })
-        .select('id')
-        .single();
-      
-      if (workError) {
-        return { success: false, error: workError.message };
-      }
-      
-      // Create composer relationship
-      if (work.composer) {
-        const composerId = await createOrGetPerson(work.composer, work.composerLifespan, work.composerLink);
-        if (composerId) {
-          await supabase
-            .from('work_contributor')
-            .insert({
-              work_id: newWork.id,
-              person_id: composerId,
-              role: 'composer',
-              link: work.composerLink
-            });
-        }
-      }
-      
-      // Create lyricist relationship
-      if (work.lyricist) {
-        const lyricistId = await createOrGetPerson(work.lyricist, work.lyricistLifespan, work.lyricistLink);
-        if (lyricistId) {
-          await supabase
-            .from('work_contributor')
-            .insert({
-              work_id: newWork.id,
-              person_id: lyricistId,
-              role: 'lyricist',
-              link: work.lyricistLink
-            });
-        }
-      }
-      
-      // Create publication record if publisher exists
-      if (work.publisher) {
-        await supabase
-          .from('publication')
-          .insert({
-            work_id: newWork.id,
-            publisher_name: work.publisher
-          });
-      }
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Import error:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
-    }
+  const updateStatus = (updates: Partial<ImportStatus>) => {
+    setImportStatus(prev => ({ ...prev, ...updates }));
   };
 
   const startImport = async () => {
@@ -220,20 +55,24 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
 
     setImporting(true);
     setProgress(0);
-    setImportStatus({
+    updateStatus({
       status: 'processing',
       imported: 0,
       total: 0,
       skipped: 0,
-      errors: []
+      errors: [],
+      currentStep: 'Fetching CSV data...'
     });
     
     try {
-      // Fetch and parse CSV
+      // Step 1: Fetch and parse CSV (5% progress)
       const csvText = await csvImportService.fetchCSV(selectedFile);
       const rows = csvImportService.parseCSV(csvText);
+      setProgress(5);
       
-      // Parse according to file type (currently only supports Eldre_populærmusikk)
+      updateStatus({ currentStep: 'Parsing CSV data...' });
+      
+      // Parse according to file type
       let works: ParsedWork[] = [];
       if (selectedFile === 'Eldre_populærmusikk.csv') {
         works = csvImportService.parseEldrePopulaermusikk(rows);
@@ -241,55 +80,59 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
         throw new Error(`Parser for ${selectedFile} not implemented yet`);
       }
       
-      setImportStatus(prev => ({ ...prev, total: works.length }));
+      updateStatus({ 
+        total: works.length,
+        currentStep: `Parsed ${works.length} works from CSV`
+      });
+      setProgress(10);
       
-      // Import each work
-      let imported = 0;
-      let skipped = 0;
-      const errors: string[] = [];
-      
-      for (let i = 0; i < works.length; i++) {
-        const work = works[i];
-        const result = await importWork(work);
-        
-        if (result.success) {
-          if (result.skipped) {
-            skipped++;
-          } else {
-            imported++;
-          }
-        } else if (result.error && result.error !== 'Empty title') {
-          errors.push(`${work.title}: ${result.error}`);
-        }
-        
-        // Update progress
-        const currentProgress = ((i + 1) / works.length) * 100;
-        setProgress(currentProgress);
-        setImportStatus(prev => ({ 
-          ...prev, 
-          imported, 
-          skipped,
-          errors: errors.slice(0, 5) // Limit to first 5 errors
-        }));
+      if (works.length === 0) {
+        throw new Error('No valid works found in CSV file');
       }
       
-      setImportStatus(prev => ({ 
-        ...prev, 
-        status: 'completed'
-      }));
+      // Step 2: Initialize batch context (15% progress)
+      updateStatus({ currentStep: 'Loading existing data...' });
+      const context = await optimizedImportService.initializeBatchContext();
+      setProgress(15);
+      
+      // Step 3: Ensure categories exist (20% progress)
+      updateStatus({ currentStep: 'Setting up categories...' });
+      const uniqueCategories = [...new Set(works.map(w => w.category))];
+      await optimizedImportService.ensureCategories(context, uniqueCategories);
+      setProgress(20);
+      
+      // Step 4: Batch create people (40% progress)
+      updateStatus({ currentStep: 'Creating people records...' });
+      await optimizedImportService.batchCreatePeople(context, works);
+      setProgress(40);
+      
+      // Step 5: Import works with all relationships (90% progress)
+      updateStatus({ currentStep: 'Importing works and relationships...' });
+      const result = await optimizedImportService.batchImportWorks(context, works);
+      setProgress(90);
+      
+      // Step 6: Complete (100% progress)
+      updateStatus({
+        status: 'completed',
+        imported: result.imported,
+        skipped: result.skipped,
+        errors: result.errors,
+        currentStep: 'Import completed!'
+      });
+      setProgress(100);
       
       toast({
-        title: "Import completed",
-        description: `Imported ${imported} works, skipped ${skipped} duplicates.`,
+        title: "Import completed successfully",
+        description: `Imported ${result.imported} works, skipped ${result.skipped} duplicates.`,
       });
       
     } catch (error) {
       console.error('Error during import:', error);
-      setImportStatus(prev => ({ 
-        ...prev, 
+      updateStatus({ 
         status: 'error',
-        errors: [error instanceof Error ? error.message : 'Unknown error']
-      }));
+        errors: [error instanceof Error ? error.message : 'Unknown error'],
+        currentStep: 'Import failed'
+      });
       
       toast({
         title: "Import failed",
@@ -307,7 +150,8 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
       imported: 0,
       total: 0,
       skipped: 0,
-      errors: []
+      errors: [],
+      currentStep: ''
     });
     setProgress(0);
     setSelectedFile('');
@@ -319,7 +163,7 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
         <DialogHeader>
           <DialogTitle>Import Data from CSV Files</DialogTitle>
           <DialogDescription>
-            Select a CSV file to import musical works data. This will create works, people, categories, and relationships in your database. Duplicates will be skipped.
+            Select a CSV file to import musical works data. This will create works, people, categories, and relationships in your database. Duplicates will be automatically skipped.
           </DialogDescription>
         </DialogHeader>
 
@@ -367,6 +211,7 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
                   <span>{Math.round(progress)}%</span>
                 </div>
                 <Progress value={progress} className="w-full" />
+                <p className="text-sm text-gray-600">{importStatus.currentStep}</p>
               </div>
 
               <div className="border rounded-lg p-4">
@@ -390,9 +235,12 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
                   <div className="mt-2 text-sm text-red-600">
                     <p className="font-medium">Errors:</p>
                     <ul className="list-disc list-inside">
-                      {importStatus.errors.map((error, index) => (
+                      {importStatus.errors.slice(0, 5).map((error, index) => (
                         <li key={index} className="truncate">{error}</li>
                       ))}
+                      {importStatus.errors.length > 5 && (
+                        <li>... and {importStatus.errors.length - 5} more errors</li>
+                      )}
                     </ul>
                   </div>
                 )}
@@ -404,8 +252,12 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
                     Import Another File
                   </Button>
                 )}
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Close
+                <Button 
+                  variant="outline" 
+                  onClick={() => onOpenChange(false)}
+                  disabled={importing}
+                >
+                  {importing ? 'Processing...' : 'Close'}
                 </Button>
               </div>
             </>
