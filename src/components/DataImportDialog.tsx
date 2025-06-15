@@ -1,6 +1,8 @@
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle, AlertCircle, FileText, Upload, X } from "lucide-react";
 import { csvImportService, ImportResult, ParsedWork } from "@/services/csvImportService";
@@ -12,37 +14,28 @@ interface DataImportDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-interface FileStatus {
-  name: string;
-  status: 'pending' | 'processing' | 'completed' | 'error';
+interface ImportStatus {
+  status: 'idle' | 'processing' | 'completed' | 'error';
   imported: number;
   total: number;
   skipped: number;
   errors: string[];
 }
 
-const CSV_FILES = [
-  { name: 'Allsanger.csv', parser: 'parseAllsanger' },
-  { name: 'Per_Lasson.csv', parser: 'parsePerLasson' },
-  { name: 'Utenlandsk_populærmusikk.csv', parser: 'parseUtenlandskPopular' },
-  { name: 'Forskjellig.csv', parser: 'parseForskjellig' },
-  { name: '1905-noter.csv', parser: 'parse1905Noter' },
-  { name: 'Forskjellige_noter.csv', parser: 'parseForskjelligeNoter' },
-  { name: 'Posca.csv', parser: 'parsePosca' },
-  { name: 'Hefter.csv', parser: 'parseHefter' }
-];
-
 export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) => {
+  const [selectedFile, setSelectedFile] = useState<string>('');
   const [importing, setImporting] = useState(false);
-  const [fileStatuses, setFileStatuses] = useState<FileStatus[]>([]);
+  const [importStatus, setImportStatus] = useState<ImportStatus>({
+    status: 'idle',
+    imported: 0,
+    total: 0,
+    skipped: 0,
+    errors: []
+  });
   const [progress, setProgress] = useState(0);
   const { toast } = useToast();
 
-  const updateFileStatus = (filename: string, updates: Partial<FileStatus>) => {
-    setFileStatuses(prev => prev.map(file => 
-      file.name === filename ? { ...file, ...updates } : file
-    ));
-  };
+  const availableFiles = csvImportService.getAvailableFiles();
 
   const createOrGetPerson = async (name: string, lifespan?: string, profileLink?: string) => {
     if (!name || name.trim() === '') return null;
@@ -216,92 +209,108 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
   };
 
   const startImport = async () => {
+    if (!selectedFile) {
+      toast({
+        title: "No file selected",
+        description: "Please select a CSV file to import.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setImporting(true);
     setProgress(0);
-    
-    // Initialize file statuses
-    const initialStatuses: FileStatus[] = CSV_FILES.map(file => ({
-      name: file.name,
-      status: 'pending',
+    setImportStatus({
+      status: 'processing',
       imported: 0,
       total: 0,
       skipped: 0,
       errors: []
-    }));
-    setFileStatuses(initialStatuses);
+    });
     
-    let totalProcessed = 0;
-    const totalFiles = CSV_FILES.length;
-    
-    for (let i = 0; i < CSV_FILES.length; i++) {
-      const file = CSV_FILES[i];
-      updateFileStatus(file.name, { status: 'processing' });
+    try {
+      // Fetch and parse CSV
+      const csvText = await csvImportService.fetchCSV(selectedFile);
+      const rows = csvImportService.parseCSV(csvText);
       
-      try {
-        // Fetch and parse CSV
-        const csvText = await csvImportService.fetchCSV(file.name);
-        const rows = csvImportService.parseCSV(csvText);
-        
-        // Parse according to file type
-        const parser = csvImportService[file.parser as keyof typeof csvImportService] as any;
-        const works: ParsedWork[] = parser(rows);
-        
-        updateFileStatus(file.name, { total: works.length });
-        
-        // Import each work
-        let imported = 0;
-        let skipped = 0;
-        const errors: string[] = [];
-        
-        for (const work of works) {
-          const result = await importWork(work);
-          if (result.success) {
-            if (result.skipped) {
-              skipped++;
-            } else {
-              imported++;
-            }
-          } else if (result.error && result.error !== 'Empty title') {
-            errors.push(`${work.title}: ${result.error}`);
-          }
-          updateFileStatus(file.name, { imported, skipped });
-        }
-        
-        updateFileStatus(file.name, { 
-          status: 'completed', 
-          errors: errors.slice(0, 5) // Limit to first 5 errors
-        });
-        
-      } catch (error) {
-        console.error(`Error processing ${file.name}:`, error);
-        updateFileStatus(file.name, { 
-          status: 'error', 
-          errors: [error instanceof Error ? error.message : 'Unknown error']
-        });
+      // Parse according to file type (currently only supports Eldre_populærmusikk)
+      let works: ParsedWork[] = [];
+      if (selectedFile === 'Eldre_populærmusikk.csv') {
+        works = csvImportService.parseEldrePopulaermusikk(rows);
+      } else {
+        throw new Error(`Parser for ${selectedFile} not implemented yet`);
       }
       
-      totalProcessed++;
-      setProgress((totalProcessed / totalFiles) * 100);
+      setImportStatus(prev => ({ ...prev, total: works.length }));
+      
+      // Import each work
+      let imported = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+      
+      for (let i = 0; i < works.length; i++) {
+        const work = works[i];
+        const result = await importWork(work);
+        
+        if (result.success) {
+          if (result.skipped) {
+            skipped++;
+          } else {
+            imported++;
+          }
+        } else if (result.error && result.error !== 'Empty title') {
+          errors.push(`${work.title}: ${result.error}`);
+        }
+        
+        // Update progress
+        const currentProgress = ((i + 1) / works.length) * 100;
+        setProgress(currentProgress);
+        setImportStatus(prev => ({ 
+          ...prev, 
+          imported, 
+          skipped,
+          errors: errors.slice(0, 5) // Limit to first 5 errors
+        }));
+      }
+      
+      setImportStatus(prev => ({ 
+        ...prev, 
+        status: 'completed'
+      }));
+      
+      toast({
+        title: "Import completed",
+        description: `Imported ${imported} works, skipped ${skipped} duplicates.`,
+      });
+      
+    } catch (error) {
+      console.error('Error during import:', error);
+      setImportStatus(prev => ({ 
+        ...prev, 
+        status: 'error',
+        errors: [error instanceof Error ? error.message : 'Unknown error']
+      }));
+      
+      toast({
+        title: "Import failed",
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: "destructive"
+      });
     }
     
     setImporting(false);
-    toast({
-      title: "Import completed",
-      description: "Data import process has finished. Check the results above.",
-    });
   };
 
-  const getStatusIcon = (status: FileStatus['status']) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'error':
-        return <AlertCircle className="w-4 h-4 text-red-600" />;
-      case 'processing':
-        return <Upload className="w-4 h-4 text-blue-600 animate-spin" />;
-      default:
-        return <FileText className="w-4 h-4 text-gray-400" />;
-    }
+  const resetImport = () => {
+    setImportStatus({
+      status: 'idle',
+      imported: 0,
+      total: 0,
+      skipped: 0,
+      errors: []
+    });
+    setProgress(0);
+    setSelectedFile('');
   };
 
   return (
@@ -310,76 +319,95 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
         <DialogHeader>
           <DialogTitle>Import Data from CSV Files</DialogTitle>
           <DialogDescription>
-            Import musical works data from the CSV files. This will create works, people, categories, and relationships in your database. Duplicates will be skipped.
+            Select a CSV file to import musical works data. This will create works, people, categories, and relationships in your database. Duplicates will be skipped.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {!importing && fileStatuses.length === 0 && (
-            <div className="text-center py-8">
-              <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-600 mb-4">
-                Ready to import data from {CSV_FILES.length} CSV files
-              </p>
-              <Button onClick={startImport} className="bg-blue-600 hover:bg-blue-700">
-                <Upload className="w-4 h-4 mr-2" />
-                Start Import
-              </Button>
+          {importStatus.status === 'idle' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Select CSV File</label>
+                <Select value={selectedFile} onValueChange={setSelectedFile}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a CSV file to import..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableFiles.map((file) => (
+                      <SelectItem key={file} value={file} disabled={file !== 'Eldre_populærmusikk.csv'}>
+                        {file} {file !== 'Eldre_populærmusikk.csv' && '(Coming soon)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="text-center py-8">
+                <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600 mb-4">
+                  {selectedFile ? `Ready to import ${selectedFile}` : 'Select a file to begin'}
+                </p>
+                <Button 
+                  onClick={startImport} 
+                  disabled={!selectedFile}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Start Import
+                </Button>
+              </div>
             </div>
           )}
 
-          {(importing || fileStatuses.length > 0) && (
+          {importStatus.status !== 'idle' && (
             <>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span>Overall Progress</span>
+                  <span>Import Progress</span>
                   <span>{Math.round(progress)}%</span>
                 </div>
                 <Progress value={progress} className="w-full" />
               </div>
 
-              <div className="space-y-3">
-                {fileStatuses.map((file) => (
-                  <div key={file.name} className="border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-2">
-                        {getStatusIcon(file.status)}
-                        <span className="font-medium">{file.name}</span>
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {file.total > 0 && (
-                          <span>
-                            {file.imported} imported, {file.skipped} skipped / {file.total} total
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {file.status === 'processing' && file.total > 0 && (
-                      <Progress value={((file.imported + file.skipped) / file.total) * 100} className="w-full h-2" />
-                    )}
-                    
-                    {file.errors.length > 0 && (
-                      <div className="mt-2 text-sm text-red-600">
-                        <p className="font-medium">Errors:</p>
-                        <ul className="list-disc list-inside">
-                          {file.errors.map((error, index) => (
-                            <li key={index} className="truncate">{error}</li>
-                          ))}
-                        </ul>
-                      </div>
+              <div className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-2">
+                    {importStatus.status === 'processing' && <Upload className="w-4 h-4 text-blue-600 animate-spin" />}
+                    {importStatus.status === 'completed' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                    {importStatus.status === 'error' && <AlertCircle className="w-4 h-4 text-red-600" />}
+                    <span className="font-medium">{selectedFile}</span>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {importStatus.total > 0 && (
+                      <span>
+                        {importStatus.imported} imported, {importStatus.skipped} skipped / {importStatus.total} total
+                      </span>
                     )}
                   </div>
-                ))}
+                </div>
+                
+                {importStatus.errors.length > 0 && (
+                  <div className="mt-2 text-sm text-red-600">
+                    <p className="font-medium">Errors:</p>
+                    <ul className="list-disc list-inside">
+                      {importStatus.errors.map((error, index) => (
+                        <li key={index} className="truncate">{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
-              {!importing && (
-                <div className="flex justify-end space-x-2 pt-4">
-                  <Button variant="outline" onClick={() => onOpenChange(false)}>
-                    Close
+              <div className="flex justify-end space-x-2 pt-4">
+                {importStatus.status === 'completed' && (
+                  <Button variant="outline" onClick={resetImport}>
+                    Import Another File
                   </Button>
-                </div>
-              )}
+                )}
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Close
+                </Button>
+              </div>
             </>
           )}
         </div>

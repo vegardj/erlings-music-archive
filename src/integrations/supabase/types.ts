@@ -9,44 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      archive_copy: {
-        Row: {
-          condition_note: string | null
-          has_musescore: boolean | null
-          id: number
-          is_duplicate: boolean | null
-          location: string | null
-          private_copy: boolean | null
-          work_id: number | null
-        }
-        Insert: {
-          condition_note?: string | null
-          has_musescore?: boolean | null
-          id?: number
-          is_duplicate?: boolean | null
-          location?: string | null
-          private_copy?: boolean | null
-          work_id?: number | null
-        }
-        Update: {
-          condition_note?: string | null
-          has_musescore?: boolean | null
-          id?: number
-          is_duplicate?: boolean | null
-          location?: string | null
-          private_copy?: boolean | null
-          work_id?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "archive_copy_work_id_fkey"
-            columns: ["work_id"]
-            isOneToOne: false
-            referencedRelation: "work"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       category: {
         Row: {
           description: string | null
@@ -65,38 +27,6 @@ export type Database = {
         }
         Relationships: []
       }
-      file_asset: {
-        Row: {
-          id: number
-          kind: Database["public"]["Enums"]["file_kind"] | null
-          uploaded_at: string | null
-          uri: string
-          work_id: number | null
-        }
-        Insert: {
-          id?: number
-          kind?: Database["public"]["Enums"]["file_kind"] | null
-          uploaded_at?: string | null
-          uri: string
-          work_id?: number | null
-        }
-        Update: {
-          id?: number
-          kind?: Database["public"]["Enums"]["file_kind"] | null
-          uploaded_at?: string | null
-          uri?: string
-          work_id?: number | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "file_asset_work_id_fkey"
-            columns: ["work_id"]
-            isOneToOne: false
-            referencedRelation: "work"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       person: {
         Row: {
           birth_year: number | null
@@ -105,6 +35,7 @@ export type Database = {
           gender: Database["public"]["Enums"]["gender_enum"] | null
           id: number
           notes: string | null
+          profile_link: string | null
         }
         Insert: {
           birth_year?: number | null
@@ -113,6 +44,7 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender_enum"] | null
           id?: number
           notes?: string | null
+          profile_link?: string | null
         }
         Update: {
           birth_year?: number | null
@@ -121,6 +53,7 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender_enum"] | null
           id?: number
           notes?: string | null
+          profile_link?: string | null
         }
         Relationships: []
       }
@@ -171,6 +104,7 @@ export type Database = {
           key_signature: string | null
           rating: number | null
           title: string
+          title_link: string | null
           updated_at: string | null
         }
         Insert: {
@@ -184,6 +118,7 @@ export type Database = {
           key_signature?: string | null
           rating?: number | null
           title: string
+          title_link?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -197,6 +132,7 @@ export type Database = {
           key_signature?: string | null
           rating?: number | null
           title?: string
+          title_link?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -211,6 +147,7 @@ export type Database = {
       }
       work_contributor: {
         Row: {
+          link: string | null
           notes: string | null
           person_id: number
           role: Database["public"]["Enums"]["contributor_role"]
@@ -218,6 +155,7 @@ export type Database = {
           work_id: number
         }
         Insert: {
+          link?: string | null
           notes?: string | null
           person_id: number
           role?: Database["public"]["Enums"]["contributor_role"]
@@ -225,6 +163,7 @@ export type Database = {
           work_id: number
         }
         Update: {
+          link?: string | null
           notes?: string | null
           person_id?: number
           role?: Database["public"]["Enums"]["contributor_role"]
@@ -260,10 +199,11 @@ export type Database = {
         | "composer"
         | "lyricist"
         | "arranger"
-        | "text_author"
+        | "translator"
+        | "performer"
         | "unknown"
       file_kind: "pdf" | "musescore" | "image" | "audio" | "other"
-      gender_enum: "female" | "male" | "unknown"
+      gender_enum: "male" | "female" | "unknown"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -383,11 +323,12 @@ export const Constants = {
         "composer",
         "lyricist",
         "arranger",
-        "text_author",
+        "translator",
+        "performer",
         "unknown",
       ],
       file_kind: ["pdf", "musescore", "image", "audio", "other"],
-      gender_enum: ["female", "male", "unknown"],
+      gender_enum: ["male", "female", "unknown"],
     },
   },
 } as const
