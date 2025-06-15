@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Edit2, Merge, Search, AlertCircle, X } from 'lucide-react';
+import { Edit2, Merge, Search, AlertCircle, X, Plus } from 'lucide-react';
 
 export const PublisherManager = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -19,6 +19,9 @@ export const PublisherManager = () => {
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [selectedMerge, setSelectedMerge] = useState<{ source: Publisher; target: Publisher } | null>(null);
   const [customMergeName, setCustomMergeName] = useState('');
+  const [manualMergeDialogOpen, setManualMergeDialogOpen] = useState(false);
+  const [manualMergeSource, setManualMergeSource] = useState<string>('');
+  const [manualMergeTarget, setManualMergeTarget] = useState<string>('');
   const queryClient = useQueryClient();
 
   const { data: publishers = [], isLoading } = useQuery({
@@ -77,6 +80,30 @@ export const PublisherManager = () => {
     setMergeDialogOpen(true);
   };
 
+  const openManualMergeDialog = () => {
+    setManualMergeSource('');
+    setManualMergeTarget('');
+    setCustomMergeName('');
+    setManualMergeDialogOpen(true);
+  };
+
+  const handleManualMerge = (customName?: string) => {
+    const sourceId = parseInt(manualMergeSource);
+    const targetId = parseInt(manualMergeTarget);
+    
+    if (isNaN(sourceId) || isNaN(targetId) || sourceId === targetId) {
+      toast.error('Please select two different publishers');
+      return;
+    }
+    
+    mergeMutation.mutate({ 
+      sourceId, 
+      targetId, 
+      newName: customName 
+    });
+    setManualMergeDialogOpen(false);
+  };
+
   const handleMerge = (keepTarget: boolean, customName?: string) => {
     if (!selectedMerge) return;
     
@@ -106,6 +133,8 @@ export const PublisherManager = () => {
     suggestions: group.suggestions.filter(suggestion => !isRejected(group.id, suggestion.id))
   })).filter(group => group.suggestions.length > 0);
 
+  const getPublisherById = (id: number) => publishers.find(p => p.id === id);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -126,6 +155,7 @@ export const PublisherManager = () => {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="manual">Manual Merge</TabsTrigger>
         </TabsList>
 
         <TabsContent value="list" className="space-y-4">
@@ -237,6 +267,26 @@ export const PublisherManager = () => {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="manual" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Plus className="w-5 h-5 mr-2" />
+                Manual Publisher Merge
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 mb-4">
+                Manually select two publishers to merge that weren't automatically identified as similar.
+              </p>
+              <Button onClick={openManualMergeDialog}>
+                <Merge className="w-4 h-4 mr-2" />
+                Start Manual Merge
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Enhanced Merge Dialog */}
@@ -282,6 +332,90 @@ export const PublisherManager = () => {
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Merge Dialog */}
+      <Dialog open={manualMergeDialogOpen} onOpenChange={setManualMergeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manual Publisher Merge</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Select two publishers to merge:</p>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Source Publisher (will be deleted):</label>
+                <Select value={manualMergeSource} onValueChange={setManualMergeSource}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select publisher to merge from" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {publishers.map((publisher) => (
+                      <SelectItem key={publisher.id} value={publisher.id.toString()}>
+                        {publisher.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Target Publisher (will be kept):</label>
+                <Select value={manualMergeTarget} onValueChange={setManualMergeTarget}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select publisher to merge into" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {publishers
+                      .filter(p => p.id.toString() !== manualMergeSource)
+                      .map((publisher) => (
+                        <SelectItem key={publisher.id} value={publisher.id.toString()}>
+                          {publisher.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {manualMergeSource && manualMergeTarget && (
+                <div className="p-3 bg-gray-50 rounded">
+                  <p className="text-sm">
+                    <strong>"{getPublisherById(parseInt(manualMergeSource))?.name}"</strong> will be merged into{' '}
+                    <strong>"{getPublisherById(parseInt(manualMergeTarget))?.name}"</strong>
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Or use a custom name:</label>
+                <Input
+                  placeholder="Enter correct publisher name"
+                  value={customMergeName}
+                  onChange={(e) => setCustomMergeName(e.target.value)}
+                />
+              </div>
+
+              <div className="flex space-x-2 pt-2">
+                <Button
+                  onClick={() => handleManualMerge()}
+                  disabled={!manualMergeSource || !manualMergeTarget}
+                  className="flex-1"
+                >
+                  Merge Publishers
+                </Button>
+                <Button
+                  onClick={() => handleManualMerge(customMergeName.trim())}
+                  disabled={!manualMergeSource || !manualMergeTarget || !customMergeName.trim()}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Merge with Custom Name
+                </Button>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
