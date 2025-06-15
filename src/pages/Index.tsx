@@ -1,17 +1,18 @@
-
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Music, Users, BookOpen, Archive, Plus } from "lucide-react";
+import { Music, Users, BookOpen, Archive, Plus, Download } from "lucide-react";
 import { WorksList } from "@/components/WorksList";
 import { PeopleList } from "@/components/PeopleList";
 import { CategoriesList } from "@/components/CategoriesList";
 import { AddWorkDialog } from "@/components/AddWorkDialog";
+import { DataImportDialog } from "@/components/DataImportDialog";
 import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const [activeTab, setActiveTab] = useState("works");
   const [showAddWork, setShowAddWork] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -33,6 +34,14 @@ const Index = () => {
             >
               <Plus className="w-4 h-4 mr-2" />
               Add Work
+            </Button>
+            <Button 
+              onClick={() => setShowImport(true)}
+              variant="outline"
+              className="border-blue-600 text-blue-600 hover:bg-blue-50"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Import Data
             </Button>
           </div>
         </div>
@@ -119,6 +128,11 @@ const Index = () => {
         <AddWorkDialog 
           open={showAddWork} 
           onOpenChange={setShowAddWork}
+        />
+        
+        <DataImportDialog 
+          open={showImport} 
+          onOpenChange={setShowImport}
         />
       </div>
     </div>
