@@ -104,7 +104,7 @@ export const csvImportService = {
   },
 
   extractLifespan(text: string): { birthYear?: number; deathYear?: number } | null {
-    if (!text) return null;
+    if (!text || text.trim() === '') return null;
     
     // Look for patterns like "1859 - 1883" or "(1905 - 1977)"
     const match = text.match(/(\d{4})\s*-\s*(\d{4})/);
@@ -126,8 +126,8 @@ export const csvImportService = {
     return null;
   },
 
-  extractYear(text: string): number | undefined {
-    if (!text) return undefined;
+  extractYear(text: string | undefined): number | undefined {
+    if (!text || text.trim() === '') return undefined;
     const match = text.match(/\d{4}/);
     return match ? parseInt(match[0]) : undefined;
   },

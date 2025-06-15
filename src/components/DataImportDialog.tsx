@@ -18,6 +18,7 @@ interface FileStatus {
   status: 'pending' | 'processing' | 'completed' | 'error';
   imported: number;
   total: number;
+  skipped: number;
   errors: string[];
 }
 
@@ -109,7 +110,23 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
     return newCategory.id;
   };
 
-  const importWork = async (work: ParsedWork): Promise<{ success: boolean; error?: string }> => {
+  const checkWorkExists = async (title: string, categoryId: number | null): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from('work')
+      .select('id')
+      .eq('title', title)
+      .eq('category_id', categoryId)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('Error checking work existence:', error);
+      return false;
+    }
+    
+    return !!data;
+  };
+
+  const importWork = async (work: ParsedWork): Promise<{ success: boolean; skipped?: boolean; error?: string }> => {
     try {
       // Skip empty titles
       if (!work.title || work.title.trim() === '') {
@@ -118,6 +135,12 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
 
       // Get or create category
       const categoryId = await createOrGetCategory(work.category);
+      
+      // Check if work already exists
+      const exists = await checkWorkExists(work.title.trim(), categoryId);
+      if (exists) {
+        return { success: true, skipped: true };
+      }
       
       // Create the work
       const { data: newWork, error: workError } = await supabase
@@ -177,6 +200,7 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
       
       return { success: true };
     } catch (error) {
+      console.error('Import error:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   };
@@ -191,6 +215,7 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
       status: 'pending',
       imported: 0,
       total: 0,
+      skipped: 0,
       errors: []
     }));
     setFileStatuses(initialStatuses);
@@ -215,16 +240,21 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
         
         // Import each work
         let imported = 0;
+        let skipped = 0;
         const errors: string[] = [];
         
         for (const work of works) {
           const result = await importWork(work);
           if (result.success) {
-            imported++;
+            if (result.skipped) {
+              skipped++;
+            } else {
+              imported++;
+            }
           } else if (result.error && result.error !== 'Empty title') {
             errors.push(`${work.title}: ${result.error}`);
           }
-          updateFileStatus(file.name, { imported });
+          updateFileStatus(file.name, { imported, skipped });
         }
         
         updateFileStatus(file.name, { 
@@ -233,6 +263,7 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
         });
         
       } catch (error) {
+        console.error(`Error processing ${file.name}:`, error);
         updateFileStatus(file.name, { 
           status: 'error', 
           errors: [error instanceof Error ? error.message : 'Unknown error']
@@ -269,8 +300,7 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
         <DialogHeader>
           <DialogTitle>Import Data from CSV Files</DialogTitle>
           <DialogDescription>
-            Import musical works data from the CSV files in your GitHub repository.
-            This will create works, people, categories, and relationships in your database.
+            Import musical works data from the CSV files. This will create works, people, categories, and relationships in your database. Duplicates will be skipped.
           </DialogDescription>
         </DialogHeader>
 
@@ -306,13 +336,17 @@ export const DataImportDialog = ({ open, onOpenChange }: DataImportDialogProps) 
                         {getStatusIcon(file.status)}
                         <span className="font-medium">{file.name}</span>
                       </div>
-                      <span className="text-sm text-gray-600">
-                        {file.total > 0 && `${file.imported}/${file.total}`}
-                      </span>
+                      <div className="text-sm text-gray-600">
+                        {file.total > 0 && (
+                          <span>
+                            {file.imported} imported, {file.skipped} skipped / {file.total} total
+                          </span>
+                        )}
+                      </div>
                     </div>
                     
                     {file.status === 'processing' && file.total > 0 && (
-                      <Progress value={(file.imported / file.total) * 100} className="w-full h-2" />
+                      <Progress value={((file.imported + file.skipped) / file.total) * 100} className="w-full h-2" />
                     )}
                     
                     {file.errors.length > 0 && (
