@@ -1,77 +1,57 @@
-import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Music, Users, BookOpen, Archive, Plus, Download } from "lucide-react";
-import { WorksList } from "@/components/WorksList";
-import { PeopleList } from "@/components/PeopleList";
-import { CategoriesList } from "@/components/CategoriesList";
-import { AddWorkDialog } from "@/components/AddWorkDialog";
-import { DataImportDialog } from "@/components/DataImportDialog";
-import { Button } from "@/components/ui/button";
+
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataImportDialog } from '@/components/DataImportDialog';
+import { WorksList } from '@/components/WorksList';
+import { PeopleList } from '@/components/PeopleList';
+import { CategoriesList } from '@/components/CategoriesList';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Upload, Users, BookOpen, Settings } from 'lucide-react';
 
 const Index = () => {
-  const [activeTab, setActiveTab] = useState("works");
-  const [showAddWork, setShowAddWork] = useState(false);
-  const [showImport, setShowImport] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8 px-4">
-        <header className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Erling's Music Transcriptions
-          </h1>
-          <p className="text-lg text-gray-600">
-            A digital archive of musical works and transcriptions
-          </p>
-        </header>
-
-        <div className="flex justify-between items-center mb-6">
-          <div className="flex space-x-2">
-            <Button 
-              onClick={() => setShowAddWork(true)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Work
-            </Button>
-            <Button 
-              onClick={() => setShowImport(true)}
-              variant="outline"
-              className="border-blue-600 text-blue-600 hover:bg-blue-50"
-            >
-              <Download className="w-4 h-4 mr-2" />
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">Music Catalog</h1>
+            <p className="text-gray-600">Manage your music collection and related data</p>
+          </div>
+          <div className="flex space-x-4">
+            <Link to="/publishers">
+              <Button variant="outline">
+                <Settings className="w-4 h-4 mr-2" />
+                Publishers
+              </Button>
+            </Link>
+            <Button onClick={() => setIsImportOpen(true)}>
+              <Upload className="w-4 h-4 mr-2" />
               Import Data
             </Button>
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
-            <TabsTrigger value="works" className="flex items-center gap-2">
-              <Music className="w-4 h-4" />
-              Works
-            </TabsTrigger>
-            <TabsTrigger value="people" className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              People
-            </TabsTrigger>
-            <TabsTrigger value="categories" className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4" />
-              Categories
-            </TabsTrigger>
-            <TabsTrigger value="archive" className="flex items-center gap-2">
-              <Archive className="w-4 h-4" />
-              Archive
-            </TabsTrigger>
+        <Tabs defaultValue="works" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="works">Works</TabsTrigger>
+            <TabsTrigger value="people">People</TabsTrigger>
+            <TabsTrigger value="categories">Categories</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="works">
+          
+          <TabsContent value="works" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Musical Works</CardTitle>
+                <CardTitle className="flex items-center">
+                  <BookOpen className="w-5 h-5 mr-2" />
+                  Musical Works
+                </CardTitle>
                 <CardDescription>
-                  Browse and manage the collection of musical compositions
+                  Browse and manage musical works in your collection
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -79,13 +59,16 @@ const Index = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
-          <TabsContent value="people">
+          
+          <TabsContent value="people" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>People</CardTitle>
+                <CardTitle className="flex items-center">
+                  <Users className="w-5 h-5 mr-2" />
+                  People
+                </CardTitle>
                 <CardDescription>
-                  Composers, lyricists, and other contributors
+                  View composers, arrangers, and other contributors
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -93,13 +76,13 @@ const Index = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
-          <TabsContent value="categories">
+          
+          <TabsContent value="categories" className="space-y-4">
             <Card>
               <CardHeader>
                 <CardTitle>Categories</CardTitle>
                 <CardDescription>
-                  Musical categories and collections
+                  Explore different musical categories and genres
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -107,32 +90,11 @@ const Index = () => {
               </CardContent>
             </Card>
           </TabsContent>
-
-          <TabsContent value="archive">
-            <Card>
-              <CardHeader>
-                <CardTitle>Archive Information</CardTitle>
-                <CardDescription>
-                  Physical copies and digital assets
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8 text-gray-500">
-                  Archive management coming soon...
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
 
-        <AddWorkDialog 
-          open={showAddWork} 
-          onOpenChange={setShowAddWork}
-        />
-        
         <DataImportDialog 
-          open={showImport} 
-          onOpenChange={setShowImport}
+          open={isImportOpen} 
+          onOpenChange={setIsImportOpen} 
         />
       </div>
     </div>
