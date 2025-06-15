@@ -103,6 +103,12 @@ export const csvImportService = {
     return result;
   },
 
+  cleanText(text: string | undefined): string | undefined {
+    if (!text) return undefined;
+    const cleaned = text.replace(/['"]/g, '').trim();
+    return cleaned === '' ? undefined : cleaned;
+  },
+
   extractLifespan(text: string): { birthYear?: number; deathYear?: number } | null {
     if (!text || text.trim() === '') return null;
     
@@ -133,101 +139,117 @@ export const csvImportService = {
   },
 
   parseAllsanger(rows: CSVRow[]): ParsedWork[] {
-    return rows.map(row => ({
-      title: row.Tittel || '',
-      key: row.Toneart || undefined,
-      composer: row.Komponist || undefined,
-      composerLifespan: row['Unnamed: 8'] || undefined,
-      lyricist: row.Tekstforfatter || undefined,
-      lyricistLifespan: row['Unnamed: 11'] || undefined,
-      category: 'Allsanger',
-      notes: `Pages: ${row['Antall sider'] || 'Unknown'}`
-    }));
+    return rows
+      .filter(row => this.cleanText(row.Tittel)) // Only include rows with titles
+      .map(row => ({
+        title: this.cleanText(row.Tittel) || '',
+        key: this.cleanText(row.Toneart),
+        composer: this.cleanText(row.Komponist),
+        composerLifespan: this.cleanText(row['Unnamed: 8']),
+        lyricist: this.cleanText(row.Tekstforfatter),
+        lyricistLifespan: this.cleanText(row['Unnamed: 11']),
+        category: 'Allsanger',
+        notes: `Pages: ${row['Antall sider'] || 'Unknown'}`
+      }));
   },
 
   parsePerLasson(rows: CSVRow[]): ParsedWork[] {
-    return rows.map(row => ({
-      title: row.Melodi || '',
-      composer: row.Komponist || undefined,
-      composerLifespan: row['Levde når'] || undefined,
-      lyricist: row.Lyrikk || undefined,
-      lyricistLifespan: row['Unnamed: 6'] || undefined,
-      compositionYear: this.extractYear(row['Når komponert']),
-      category: 'Per Lasson',
-      notes: `No: ${row['Unnamed: 1'] || ''}`
-    }));
+    return rows
+      .filter(row => this.cleanText(row.Melodi)) // Only include rows with melodies
+      .map(row => ({
+        title: this.cleanText(row.Melodi) || '',
+        composer: this.cleanText(row.Komponist),
+        composerLifespan: this.cleanText(row['Levde når']),
+        lyricist: this.cleanText(row.Lyrikk),
+        lyricistLifespan: this.cleanText(row['Unnamed: 6']),
+        compositionYear: this.extractYear(row['Når komponert']),
+        category: 'Per Lasson',
+        notes: `No: ${row['Unnamed: 1'] || ''}`
+      }));
   },
 
   parseUtenlandskPopular(rows: CSVRow[]): ParsedWork[] {
-    return rows.map(row => ({
-      title: row.Melodi || '',
-      composer: row.Komponist || undefined,
-      composerLifespan: row['Levde når'] || undefined,
-      lyricist: row.Lyrikk || undefined,
-      lyricistLifespan: row['Levde når.1'] || undefined,
-      compositionYear: this.extractYear(row['Når komponert']),
-      category: 'Utenlandsk populærmusikk',
-      notes: row.Sanginfo || undefined
-    }));
+    return rows
+      .filter(row => this.cleanText(row.Melodi)) // Only include rows with melodies
+      .map(row => ({
+        title: this.cleanText(row.Melodi) || '',
+        composer: this.cleanText(row.Komponist),
+        composerLifespan: this.cleanText(row['Levde når']),
+        lyricist: this.cleanText(row.Lyrikk),
+        lyricistLifespan: this.cleanText(row['Levde når.1']),
+        compositionYear: this.extractYear(row['Når komponert']),
+        category: 'Utenlandsk populærmusikk',
+        notes: this.cleanText(row.Sanginfo)
+      }));
   },
 
   parseForskjellig(rows: CSVRow[]): ParsedWork[] {
-    return rows.map(row => ({
-      title: row['Unnamed: 1'] || '',
-      composer: row.Komponist || undefined,
-      composerLifespan: row['Unnamed: 3'] || undefined,
-      lyricist: row['Evt. Tekstforfatter'] || undefined,
-      lyricistLifespan: row['Unnamed: 5'] || undefined,
-      compositionYear: this.extractYear(row.Komponert),
-      category: 'Forskjellig',
-      notes: row.Kilde || undefined
-    }));
+    return rows
+      .filter(row => this.cleanText(row['Unnamed: 1'])) // Only include rows with titles
+      .map(row => ({
+        title: this.cleanText(row['Unnamed: 1']) || '',
+        composer: this.cleanText(row.Komponist),
+        composerLifespan: this.cleanText(row['Unnamed: 3']),
+        lyricist: this.cleanText(row['Evt. Tekstforfatter']),
+        lyricistLifespan: this.cleanText(row['Unnamed: 5']),
+        compositionYear: this.extractYear(row.Komponert),
+        category: 'Forskjellig',
+        notes: this.cleanText(row.Kilde)
+      }));
   },
 
   parse1905Noter(rows: CSVRow[]): ParsedWork[] {
-    return rows.map(row => ({
-      title: row['Unnamed: 1'] || '',
-      composer: row['1905-noter. '] || undefined,
-      publisher: row['Unnamed: 2'] || undefined,
-      category: '1905-noter',
-      notes: row['Unnamed: 4'] || undefined
-    }));
+    return rows
+      .filter(row => this.cleanText(row['Unnamed: 1'])) // Only include rows with titles
+      .map(row => ({
+        title: this.cleanText(row['Unnamed: 1']) || '',
+        composer: this.cleanText(row['1905-noter. ']),
+        publisher: this.cleanText(row['Unnamed: 2']),
+        category: '1905-noter',
+        notes: this.cleanText(row['Unnamed: 4'])
+      }));
   },
 
   parseForskjelligeNoter(rows: CSVRow[]): ParsedWork[] {
-    return rows.map(row => ({
-      title: row.Tittel || '',
-      form: row['Unnamed: 2'] || undefined,
-      key: row['Unnamed: 3'] || undefined,
-      composer: row.Komponist || undefined,
-      composerLifespan: row['Unnamed: 5'] || undefined,
-      lyricist: row.Tekstforfatter || undefined,
-      lyricistLifespan: row['Unnamed: 8'] || undefined,
-      compositionYear: this.extractYear(row['Unnamed: 9']),
-      category: 'Forskjellige noter'
-    }));
+    return rows
+      .filter(row => this.cleanText(row.Tittel)) // Only include rows with titles
+      .map(row => ({
+        title: this.cleanText(row.Tittel) || '',
+        form: this.cleanText(row['Unnamed: 2']),
+        key: this.cleanText(row['Unnamed: 3']),
+        composer: this.cleanText(row.Komponist),
+        composerLifespan: this.cleanText(row['Unnamed: 5']),
+        lyricist: this.cleanText(row.Tekstforfatter),
+        lyricistLifespan: this.cleanText(row['Unnamed: 8']),
+        compositionYear: this.extractYear(row['Unnamed: 9']),
+        category: 'Forskjellige noter'
+      }));
   },
 
   parsePosca(rows: CSVRow[]): ParsedWork[] {
-    return rows.map(row => ({
-      title: row['Unnamed: 2'] || '',
-      composer: row['Unnamed: 3'] || undefined,
-      composerLifespan: row['Unnamed: 4'] || undefined,
-      lyricist: row['Unnamed: 5'] || undefined,
-      lyricistLifespan: row['Unnamed: 6'] || undefined,
-      compositionYear: this.extractYear(row['Unnamed: 7']),
-      publisher: row['Unnamed: 12'] || undefined,
-      category: 'Posca'
-    }));
+    return rows
+      .filter(row => this.cleanText(row['Unnamed: 2'])) // Only include rows with titles
+      .map(row => ({
+        title: this.cleanText(row['Unnamed: 2']) || '',
+        composer: this.cleanText(row['Unnamed: 3']),
+        composerLifespan: this.cleanText(row['Unnamed: 4']),
+        lyricist: this.cleanText(row['Unnamed: 5']),
+        lyricistLifespan: this.cleanText(row['Unnamed: 6']),
+        compositionYear: this.extractYear(row['Unnamed: 7']),
+        publisher: this.cleanText(row['Unnamed: 12']),
+        category: 'Posca'
+      }));
   },
 
   parseHefter(rows: CSVRow[]): ParsedWork[] {
-    return rows.map(row => ({
-      title: row['Unnamed: 1'] || '',
-      composer: row['Unnamed: 2'] || undefined,
-      composerLifespan: row['Unnamed: 3'] || undefined,
-      category: 'Hefter',
-      notes: row['Unnamed: 4'] || undefined
-    }));
+    return rows
+      .filter(row => this.cleanText(row['Unnamed: 1'])) // Only include rows with titles
+      .map(row => ({
+        title: this.cleanText(row['Unnamed: 1']) || '',
+        composer: this.cleanText(row['Unnamed: 2']),
+        composerLifespan: this.cleanText(row['Unnamed: 3']),
+        category: 'Hefter',
+        notes: this.cleanText(row['Unnamed: 4'])
+      }));
   }
 };
