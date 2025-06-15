@@ -24,15 +24,34 @@ export interface ParsedWork {
   notes?: string;
 }
 
-const CSV_BASE_URL = 'https://raw.githubusercontent.com/vegardj/erlings-music-archive/main/innholdsfortegnelse_csv/';
+// Import the local CSV files directly
+import AllsangerCSV from '../../innholdsfortegnelse_csv/Allsanger.csv?raw';
+import PerLassonCSV from '../../innholdsfortegnelse_csv/Per_Lasson.csv?raw';
+import UtenlandskCSV from '../../innholdsfortegnelse_csv/Utenlandsk_popul_rmusikk.csv?raw';
+import ForskjelligCSV from '../../innholdsfortegnelse_csv/Forskjellig.csv?raw';
+import NotesPP1905CSV from '../../innholdsfortegnelse_csv/1905-noter.csv?raw';
+import ForskjelligeNoterCSV from '../../innholdsfortegnelse_csv/Forskjellige_noter.csv?raw';
+import PoscaCSV from '../../innholdsfortegnelse_csv/Posca.csv?raw';
+import HefterCSV from '../../innholdsfortegnelse_csv/Hefter.csv?raw';
+
+const LOCAL_CSV_FILES = {
+  'Allsanger.csv': AllsangerCSV,
+  'Per_Lasson.csv': PerLassonCSV,
+  'Utenlandsk_popul_rmusikk.csv': UtenlandskCSV,
+  'Forskjellig.csv': ForskjelligCSV,
+  '1905-noter.csv': NotesPP1905CSV,
+  'Forskjellige_noter.csv': ForskjelligeNoterCSV,
+  'Posca.csv': PoscaCSV,
+  'Hefter.csv': HefterCSV
+};
 
 export const csvImportService = {
   async fetchCSV(filename: string): Promise<string> {
-    const response = await fetch(`${CSV_BASE_URL}${filename}`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch ${filename}: ${response.statusText}`);
+    const csvContent = LOCAL_CSV_FILES[filename as keyof typeof LOCAL_CSV_FILES];
+    if (!csvContent) {
+      throw new Error(`CSV file ${filename} not found`);
     }
-    return response.text();
+    return csvContent;
   },
 
   parseCSV(csvText: string): CSVRow[] {
