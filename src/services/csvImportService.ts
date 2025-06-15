@@ -142,31 +142,36 @@ export const csvImportService = {
 
   parseEldrePopulaermusikk(rows: CSVRow[]): ParsedWork[] {
     console.log('Parsing Eldre_populærmusikk CSV with columns:', rows[0] ? Object.keys(rows[0]) : 'No data');
+    console.log('First few rows:', rows.slice(0, 3));
     
     return rows
       .filter(row => {
-        const title = this.cleanText(row.Tittel || row.title);
+        // Use "Melodi" as the title field based on the actual CSV structure
+        const title = this.cleanText(row.Melodi || row.melodi);
         return title && title.length > 0;
       })
       .map(row => {
         const work: ParsedWork = {
-          title: this.cleanText(row.Tittel || row.title) || '',
-          titleLink: this.cleanText(row.Tittel_link || row.title_link),
-          composer: this.cleanText(row.Komponist || row.composer),
-          composerLink: this.cleanText(row.Komponist_link || row.composer_link),
-          composerLifespan: this.cleanText(row.Levde_når || row.composer_lifespan),
-          lyricist: this.cleanText(row.Tekstforfatter || row.lyricist),
-          lyricistLink: this.cleanText(row.Tekstforfatter_link || row.lyricist_link),
-          lyricistLifespan: this.cleanText(row.Tekstforfatter_levde || row.lyricist_lifespan),
-          compositionYear: this.extractYear(row.Komponert || row.composition_year),
+          // Map actual CSV columns to our work structure
+          title: this.cleanText(row.Melodi || row.melodi) || '',
+          titleLink: this.cleanText(row.Melodi_link || row.melodi_link),
+          composer: this.cleanText(row.Komponist || row.komponist),
+          composerLink: this.cleanText(row.Komponist_link || row.komponist_link),
+          composerLifespan: this.cleanText(row.Levde_når || row.levde_når),
+          lyricist: this.cleanText(row.Lyrikk || row.lyrikk),
+          lyricistLink: this.cleanText(row.Lyrikk_link || row.lyrikk_link),
+          lyricistLifespan: this.cleanText(row.Levde_når_2 || row.levde_når_2),
+          compositionYear: this.extractYear(row.Når_komponert || row.når_komponert),
           category: 'Eldre populærmusikk',
-          key: this.cleanText(row.Toneart || row.key),
+          key: this.cleanText(row.Toneart || row.toneart),
           form: this.cleanText(row.Form || row.form),
-          publisher: this.cleanText(row.Forlag || row.publisher),
-          notes: this.cleanText(row.Merknad || row.notes)
+          publisher: this.cleanText(row.Forlag || row.forlag),
+          notes: this.cleanText(row.Diverse || row.diverse || row.Merknad || row.merknad)
         };
         
-        console.log('Parsed work:', work.title, 'with links:', {
+        console.log('Parsed work:', work.title, 'with data:', {
+          composer: work.composer,
+          lyricist: work.lyricist,
           titleLink: work.titleLink,
           composerLink: work.composerLink,
           lyricistLink: work.lyricistLink
