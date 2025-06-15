@@ -10,12 +10,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Edit2, Merge, Search, AlertCircle } from 'lucide-react';
+import { Edit2, Merge, Search, AlertCircle, X } from 'lucide-react';
 
 export const PublisherManager = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [rejectedSuggestions, setRejectedSuggestions] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
   const { data: publishers = [], isLoading } = useQuery({
@@ -69,9 +70,25 @@ export const PublisherManager = () => {
     mergeMutation.mutate({ sourceId, targetId });
   };
 
+  const handleRejectSuggestion = (groupId: number, suggestionId: number) => {
+    const rejectionKey = `${groupId}-${suggestionId}`;
+    setRejectedSuggestions(prev => new Set([...prev, rejectionKey]));
+    toast.success('Suggestion rejected');
+  };
+
+  const isRejected = (groupId: number, suggestionId: number) => {
+    return rejectedSuggestions.has(`${groupId}-${suggestionId}`);
+  };
+
   const filteredPublishers = publishers.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Filter out rejected suggestions from similar publishers
+  const filteredSimilarPublishers = similarPublishers.map(group => ({
+    ...group,
+    suggestions: group.suggestions.filter(suggestion => !isRejected(group.id, suggestion.id))
+  })).filter(group => group.suggestions.length > 0);
 
   return (
     <div className="space-y-6">
@@ -87,9 +104,9 @@ export const PublisherManager = () => {
           <TabsTrigger value="list">All Publishers</TabsTrigger>
           <TabsTrigger value="similar" className="relative">
             Similar Names
-            {similarPublishers.length > 0 && (
+            {filteredSimilarPublishers.length > 0 && (
               <Badge variant="destructive" className="ml-2 h-5 w-5 p-0 text-xs">
-                {similarPublishers.length}
+                {filteredSimilarPublishers.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -147,7 +164,7 @@ export const PublisherManager = () => {
         <TabsContent value="similar" className="space-y-4">
           {loadingSimilar ? (
             <div>Analyzing similar publisher names...</div>
-          ) : similarPublishers.length === 0 ? (
+          ) : filteredSimilarPublishers.length === 0 ? (
             <Card>
               <CardContent className="p-6 text-center">
                 <AlertCircle className="w-12 h-12 mx-auto mb-4 text-green-500" />
@@ -157,7 +174,7 @@ export const PublisherManager = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {similarPublishers.map((group) => (
+              {filteredSimilarPublishers.map((group) => (
                 <Card key={group.id}>
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center justify-between">
@@ -173,38 +190,49 @@ export const PublisherManager = () => {
                       {group.suggestions.map((suggestion) => (
                         <div key={suggestion.id} className="flex items-center justify-between bg-gray-50 p-3 rounded">
                           <span className="font-medium">{suggestion.name}</span>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button size="sm" variant="outline">
-                                <Merge className="w-3 h-3 mr-1" />
-                                Merge
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Merge Publishers</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4">
-                                <p>Choose which publisher name to keep:</p>
-                                <div className="space-y-2">
-                                  <Button
-                                    className="w-full justify-start"
-                                    variant="outline"
-                                    onClick={() => handleMerge(suggestion.id, group.id)}
-                                  >
-                                    Keep: <strong className="ml-2">{group.name}</strong>
-                                  </Button>
-                                  <Button
-                                    className="w-full justify-start"
-                                    variant="outline"
-                                    onClick={() => handleMerge(group.id, suggestion.id)}
-                                  >
-                                    Keep: <strong className="ml-2">{suggestion.name}</strong>
-                                  </Button>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRejectSuggestion(group.id, suggestion.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <X className="w-3 h-3 mr-1" />
+                              Not the same
+                            </Button>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button size="sm" variant="outline">
+                                  <Merge className="w-3 h-3 mr-1" />
+                                  Merge
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Merge Publishers</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <p>Choose which publisher name to keep:</p>
+                                  <div className="space-y-2">
+                                    <Button
+                                      className="w-full justify-start"
+                                      variant="outline"
+                                      onClick={() => handleMerge(suggestion.id, group.id)}
+                                    >
+                                      Keep: <strong className="ml-2">{group.name}</strong>
+                                    </Button>
+                                    <Button
+                                      className="w-full justify-start"
+                                      variant="outline"
+                                      onClick={() => handleMerge(group.id, suggestion.id)}
+                                    >
+                                      Keep: <strong className="ml-2">{suggestion.name}</strong>
+                                    </Button>
+                                  </div>
                                 </div>
-                              </div>
-                            </DialogContent>
-                          </Dialog>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
                         </div>
                       ))}
                     </div>
