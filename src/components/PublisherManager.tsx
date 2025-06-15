@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { publisherService, Publisher, SimilarPublisher } from '@/services/publisherService';
@@ -17,6 +16,9 @@ export const PublisherManager = () => {
   const [editName, setEditName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [rejectedSuggestions, setRejectedSuggestions] = useState<Set<string>>(new Set());
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [selectedMerge, setSelectedMerge] = useState<{ source: Publisher; target: Publisher } | null>(null);
+  const [customMergeName, setCustomMergeName] = useState('');
   const queryClient = useQueryClient();
 
   const { data: publishers = [], isLoading } = useQuery({
@@ -43,11 +45,14 @@ export const PublisherManager = () => {
   });
 
   const mergeMutation = useMutation({
-    mutationFn: ({ sourceId, targetId }: { sourceId: number; targetId: number }) =>
-      publisherService.mergePublishers(sourceId, targetId),
+    mutationFn: ({ sourceId, targetId, newName }: { sourceId: number; targetId: number; newName?: string }) =>
+      publisherService.mergePublishers(sourceId, targetId, newName),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['publishers'] });
       queryClient.invalidateQueries({ queryKey: ['similar-publishers'] });
+      setMergeDialogOpen(false);
+      setSelectedMerge(null);
+      setCustomMergeName('');
       toast.success('Publishers merged successfully');
     },
     onError: (error) => {
@@ -66,8 +71,20 @@ export const PublisherManager = () => {
     }
   };
 
-  const handleMerge = (sourceId: number, targetId: number) => {
-    mergeMutation.mutate({ sourceId, targetId });
+  const openMergeDialog = (source: Publisher, target: Publisher) => {
+    setSelectedMerge({ source, target });
+    setCustomMergeName('');
+    setMergeDialogOpen(true);
+  };
+
+  const handleMerge = (keepTarget: boolean, customName?: string) => {
+    if (!selectedMerge) return;
+    
+    const { source, target } = selectedMerge;
+    const sourceId = keepTarget ? source.id : target.id;
+    const targetId = keepTarget ? target.id : source.id;
+    
+    mergeMutation.mutate({ sourceId, targetId, newName: customName });
   };
 
   const handleRejectSuggestion = (groupId: number, suggestionId: number) => {
@@ -84,7 +101,6 @@ export const PublisherManager = () => {
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Filter out rejected suggestions from similar publishers
   const filteredSimilarPublishers = similarPublishers.map(group => ({
     ...group,
     suggestions: group.suggestions.filter(suggestion => !isRejected(group.id, suggestion.id))
@@ -200,38 +216,17 @@ export const PublisherManager = () => {
                               <X className="w-3 h-3 mr-1" />
                               Not the same
                             </Button>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button size="sm" variant="outline">
-                                  <Merge className="w-3 h-3 mr-1" />
-                                  Merge
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Merge Publishers</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <p>Choose which publisher name to keep:</p>
-                                  <div className="space-y-2">
-                                    <Button
-                                      className="w-full justify-start"
-                                      variant="outline"
-                                      onClick={() => handleMerge(suggestion.id, group.id)}
-                                    >
-                                      Keep: <strong className="ml-2">{group.name}</strong>
-                                    </Button>
-                                    <Button
-                                      className="w-full justify-start"
-                                      variant="outline"
-                                      onClick={() => handleMerge(group.id, suggestion.id)}
-                                    >
-                                      Keep: <strong className="ml-2">{suggestion.name}</strong>
-                                    </Button>
-                                  </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openMergeDialog(
+                                { id: group.id, name: group.name, created_at: '' },
+                                suggestion
+                              )}
+                            >
+                              <Merge className="w-3 h-3 mr-1" />
+                              Merge
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -243,6 +238,53 @@ export const PublisherManager = () => {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Enhanced Merge Dialog */}
+      <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Merge Publishers</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Choose which publisher name to keep or enter a custom name:</p>
+            
+            {selectedMerge && (
+              <div className="space-y-3">
+                <Button
+                  className="w-full justify-start text-left"
+                  variant="outline"
+                  onClick={() => handleMerge(true)}
+                >
+                  Keep: <strong className="ml-2">{selectedMerge.target.name}</strong>
+                </Button>
+                <Button
+                  className="w-full justify-start text-left"
+                  variant="outline"
+                  onClick={() => handleMerge(false)}
+                >
+                  Keep: <strong className="ml-2">{selectedMerge.source.name}</strong>
+                </Button>
+                
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Or enter a custom name:</p>
+                  <Input
+                    placeholder="Enter correct publisher name"
+                    value={customMergeName}
+                    onChange={(e) => setCustomMergeName(e.target.value)}
+                  />
+                  <Button
+                    className="w-full"
+                    disabled={!customMergeName.trim()}
+                    onClick={() => handleMerge(true, customMergeName.trim())}
+                  >
+                    Use Custom Name: <strong className="ml-2">{customMergeName}</strong>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

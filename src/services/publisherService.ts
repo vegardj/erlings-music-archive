@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Publisher {
@@ -34,7 +33,17 @@ export const publisherService = {
     if (error) throw error;
   },
 
-  async mergePublishers(sourceId: number, targetId: number): Promise<void> {
+  async mergePublishers(sourceId: number, targetId: number, newName?: string): Promise<void> {
+    // If a custom name is provided, update the target publisher first
+    if (newName) {
+      const { error: updateError } = await supabase
+        .from('publisher')
+        .update({ name: newName })
+        .eq('id', targetId);
+      
+      if (updateError) throw updateError;
+    }
+
     // Update all publications to use the target publisher
     const { error: updateError } = await supabase
       .from('publication')
